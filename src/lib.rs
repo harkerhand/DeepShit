@@ -3,19 +3,16 @@ use proc_macro::TokenStream;
 use quote::quote;
 use reqwest::blocking::Client;
 use serde_json::json;
-use syn::{ItemStruct, LitStr, parse_macro_input};
+use syn::{ItemImpl, ItemStruct, LitStr, parse_macro_input};
 
+// --- 1. 处理结构体的属性宏 ---
 #[proc_macro_attribute]
-pub fn ai_logic(args: TokenStream, input: TokenStream) -> TokenStream {
-    // 解析指令字符串
+pub fn ai_struct(args: TokenStream, input: TokenStream) -> TokenStream {
     let instruction = parse_macro_input!(args as LitStr).value();
-    // 解析结构体
     let item_struct = parse_macro_input!(input as ItemStruct);
     let struct_name = &item_struct.ident;
 
-    // 打印当前正在处理的结构体，方便在编译终端查看进度
-    println!("---------- AI Code Gen: {} ----------", struct_name);
-
+    // 提取字段信息，给 AI 提供最准确的上下文
     let fields_info = item_struct
         .fields
         .iter()
@@ -24,89 +21,86 @@ pub fn ai_logic(args: TokenStream, input: TokenStream) -> TokenStream {
         .join(", ");
 
     let prompt = format!(
-        "You are a Rust compiler. For: struct {} {{ {} }}\n\
-         Task: {}\n\
-         Output ONLY the 'impl {} {{ ... }}' block. NO markdown, NO text, NO comments.",
+        "Context: Rust Struct Definition.\nSource: struct {} {{ {} }}\nTask: {}\n\
+         Output ONLY an 'impl {} {{ ... }}' block. No markdown, no talk.",
         struct_name, fields_info, instruction, struct_name
     );
 
-    // 直接请求，不走缓存
-    let ai_generated_code = match call_llm_api(&prompt) {
-        Ok(raw) => {
-            let cleaned = clean_code_block(&raw);
-            // 这里用 eprintln 是为了让信息直接在 cargo build 的终端里显眼地跳出来
-            eprintln!(
-                "AI Response for {}:\n{}\n--------------------",
-                struct_name, cleaned
-            );
-            cleaned
-        }
-        Err(e) => {
-            eprintln!("LLM API Error: {}", e);
-            String::new()
-        }
-    };
+    let ai_code = call_llm_api(&prompt);
+    let ai_tokens = parse_ai_code(&ai_code);
 
-    // 解析生成的代码。如果失败，输出 compile_error 让开发者在 IDE 里能看到报错
-    let ai_tokens: proc_macro2::TokenStream = ai_generated_code.parse().unwrap_or_else(|_| {
-        let err = format!(
-            "AI output could not be parsed as Rust: {}",
-            ai_generated_code
-        );
-        quote! { compile_error!(#err); }
-    });
-
-    // 组合：必须把原有的 #item_struct 放回去，否则结构体定义就丢了
-    let expanded = quote! {
+    quote! {
         #item_struct
-
         #ai_tokens
-    };
-
-    TokenStream::from(expanded)
-}
-
-fn clean_code_block(input: &str) -> String {
-    // 移除可能存在的 Markdown 标签
-    let mut output = input
-        .replace("```rust", "")
-        .replace("```", "")
-        .replace("`", ""); // 有时候 AI 喜欢用单个反引号包裹
-
-    // 只保留从 impl 开始的部分，过滤掉前面的废话
-    if let Some(start) = output.find("impl") {
-        output = output[start..].to_string();
     }
-    output.trim().to_string()
+    .into()
 }
 
-fn call_llm_api(prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // 从环境变量获取 API_KEY
-    let api_key = std::env::var("DEEPSEEK_API_KEY")
-        .map_err(|_| "DEEPSEEK_API_KEY environment variable not set".to_string())?;
+// --- 2. 处理 impl 块的属性宏 ---
+#[proc_macro_attribute]
+pub fn ai_impl(args: TokenStream, input: TokenStream) -> TokenStream {
+    let instruction = parse_macro_input!(args as LitStr).value();
+    let item_impl = parse_macro_input!(input as ItemImpl);
+    let self_ty = &item_impl.self_ty; // 拿到 impl 后的类型名
 
-    // 增加超时，防止 API 响应慢导致编译卡死
+    // 对于 impl 块，AI 往往不知道字段，所以 Prompt 需要稍微调整
+    let prompt = format!(
+        "Context: Rust impl block for type {:?}.\nTask: {}\n\
+         Generate the methods inside the impl block. Return ONLY the complete 'impl ... {{ ... }}' block.",
+        self_ty, instruction
+    );
+
+    let ai_code = call_llm_api(&prompt);
+    let ai_tokens = parse_ai_code(&ai_code);
+
+    // 注意：这里我们通常会替换掉原本空的 impl 块
+    quote! {
+        #ai_tokens
+    }
+    .into()
+}
+
+// --- 通用辅助函数 ---
+
+fn call_llm_api(prompt: &str) -> String {
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(45))
-        .build()?;
+        .build()
+        .unwrap();
 
-    let res = client
-        .post("https://api.deepseek.com/v1/chat/completions") // 修正了 URL
-        .header("Authorization", format!("Bearer {}", api_key))
+    let res = client.post("https://api.deepseek.com/v1/chat/completions")
+        .header("Authorization", "Bearer sk-7c98f9eec54f44c79c478738daa2fe19")
         .json(&json!({
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are a specialized Rust code generator. You output ONLY valid Rust syntax without any natural language."},
+                {"role": "system", "content": "You are a Rust expert. You only output valid Rust code blocks."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.0
-        }))
-        .send()?
-        .json::<serde_json::Value>()?;
+        })).send();
 
-    let content = res["choices"][0]["message"]["content"]
-        .as_str()
-        .ok_or("No content in AI response")?;
+    match res {
+        Ok(response) => {
+            let json: serde_json::Value = response.json().unwrap_or_default();
+            json["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        Err(e) => {
+            eprintln!("API Error: {}", e);
+            String::new()
+        }
+    }
+}
 
-    Ok(content.to_string())
+fn parse_ai_code(raw: &str) -> proc_macro2::TokenStream {
+    let mut cleaned = raw.replace("```rust", "").replace("```", "");
+    if let Some(start) = cleaned.find("impl") {
+        cleaned = cleaned[start..].to_string();
+    }
+    cleaned.parse().unwrap_or_else(|_| {
+        let err = format!("AI output parse error: {}", cleaned);
+        quote! { compile_error!(#err); }
+    })
 }
