@@ -9,11 +9,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/harkerhand/deepshit?style=flat-square&logo=github)](https://github.com/harkerhand/deepshit)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)
 
-一个创新的Rust宏框架，使用AI能力自动生成结构体方法和impl块实现。通过自然语言描述，让编译器自动为你生成高质量的Rust代码。
-
-![示例代码](assets/code.png)
-
-![示例输出](assets/output.png)
+一个创新的Rust宏框架，使用AI能力自动生成结构体方法和impl块实现。通过自然语言描述，让编译器自动为你生成代码，极大提升开发效率和代码质量。
 
 [快速开始](#-快速开始) • [功能特性](#-核心功能) • [使用示例](#-使用示例) • [文档](./Readme.md)
 
@@ -251,6 +247,10 @@ cargo run
 本项目采用 MIT 许可证。详见 [LICENSE](LICENSE)
 
 <div align="center">
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/image?repos=harekrhand/deepshit&type=date&legend=top-left)](https://www.star-history.com/?repos=harekrhand%2Fdeepshit&type=date&legend=top-left)
 
 **⭐ 如果这个项目对你有帮助，请给个 Star！ ⭐**
 

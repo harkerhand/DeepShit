@@ -19,6 +19,7 @@ fn main() {
     // 场景 A 的调用
     let user = User::new(1, "DeepSeeker".into(), "ai@example.com".into());
     println!("User: {}", user.username());
+    println!("Email: {}", user.email());
 
     // 场景 B 的调用
     let calc = Calculator { precision: 2 };
