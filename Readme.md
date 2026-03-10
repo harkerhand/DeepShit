@@ -5,8 +5,8 @@
 **AI驱动的Rust派生宏框架**
 
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange?logo=rust&style=flat-square)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/yourusername/deepshit?style=flat-square&logo=github)](https://github.com/yourusername/deepshit)
+[![License](https://img.shields.io/badge/License-WTFPL-green?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/harkerhand/deepshit?style=flat-square&logo=github)](https://github.com/harkerhand/deepshit)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)
 
 一个创新的Rust宏框架，使用AI能力自动生成结构体方法和impl块实现。通过自然语言描述，让编译器自动为你生成高质量的Rust代码。
