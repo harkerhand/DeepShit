@@ -68,10 +68,17 @@ fn call_llm_api(prompt: &str) -> String {
         .build()
         .unwrap();
 
-    let res = client.post("https://api.deepseek.com/v1/chat/completions")
-        .header("Authorization", "Bearer sk-7c98f9eec54f44c79c478738daa2fe19")
+    let base_url =
+        std::env::var("API_BASE_URL").unwrap_or_else(|_| "https://api.deepseek.com".to_string());
+
+    let api_key = std::env::var("API_KEY").unwrap();
+
+    let model = std::env::var("MODEL").unwrap_or_else(|_| "deepseek-chat".to_string());
+
+    let res = client.post(format!("{}/v1/chat/completions", base_url))
+        .header("Authorization", format!("Bearer {}", api_key))
         .json(&json!({
-            "model": "deepseek-chat",
+            "model": model,
             "messages": [
                 {"role": "system", "content": "You are a Rust expert. You only output valid Rust code blocks."},
                 {"role": "user", "content": prompt}
